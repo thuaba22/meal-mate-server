@@ -29,8 +29,14 @@ async function run() {
     // Send a ping to confirm a successful connection
     // await client.db("admin").command({ ping: 1 });
     const mealsCollection = client.db("mealsDB").collection("meals");
+    const packageCollection = client.db("mealsDB").collection("premium");
     app.get("/meals", async (req, res) => {
       const cursor = mealsCollection.find();
+      const result = await cursor.toArray();
+      res.send(result);
+    });
+    app.get("/premium", async (req, res) => {
+      const cursor = packageCollection.find();
       const result = await cursor.toArray();
       res.send(result);
     });
