@@ -9,11 +9,9 @@ const port = process.env.PORT || 5000;
 // middleware
 app.use(cors());
 app.use(express.json());
-// ScbrqsJP6NWb3Azw
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.unqmcva.mongodb.net/?retryWrites=true&w=majority`;
 
-// Create a MongoClient with a MongoClientOptions object to set the Stable API version
 const client = new MongoClient(uri, {
   serverApi: {
     version: ServerApiVersion.v1,
@@ -24,22 +22,24 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
-    // Connect the client to the server	(optional starting in v4.7)
-    // await client.connect();
-    // Send a ping to confirm a successful connection
-    // await client.db("admin").command({ ping: 1 });
     const mealsCollection = client.db("mealsDB").collection("meals");
     const packageCollection = client.db("mealsDB").collection("premium");
+
+    // Get all meals
     app.get("/meals", async (req, res) => {
       const cursor = mealsCollection.find();
       const result = await cursor.toArray();
       res.send(result);
     });
+
+    // Get all premium packages
     app.get("/premium", async (req, res) => {
       const cursor = packageCollection.find();
       const result = await cursor.toArray();
       res.send(result);
     });
+
+    // Get a specific meal by ID
     app.get("/meals/:id", async (req, res) => {
       const id = req.params.id;
       const query = {
@@ -49,6 +49,30 @@ async function run() {
       const result = await mealsCollection.findOne(query);
       res.send(result);
     });
+
+    // Update likes for a specific meal by ID
+    app.put("/meals/like/:id", async (req, res) => {
+      const id = req.params.id;
+
+      try {
+        const query = { _id: new ObjectId(id) };
+        const update = { $inc: { likes: 1 } };
+
+        const result = await mealsCollection.updateOne(query, update);
+
+        if (result.modifiedCount > 0) {
+          res.json({ success: true, message: "Like updated successfully." });
+        } else {
+          res.status(404).json({ success: false, message: "Meal not found." });
+        }
+      } catch (error) {
+        console.error(error);
+        res
+          .status(500)
+          .json({ success: false, message: "Internal server error." });
+      }
+    });
+
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!"
     );
@@ -57,6 +81,7 @@ async function run() {
     // await client.close();
   }
 }
+
 run().catch(console.dir);
 
 app.get("/", (req, res) => {
