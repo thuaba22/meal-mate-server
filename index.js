@@ -73,6 +73,28 @@ async function run() {
       }
     });
 
+    app.post("/meals/review", async (req, res) => {
+      const { mealId, user, comment } = req.body;
+
+      try {
+        const query = { _id: new ObjectId(mealId) };
+        const update = { $push: { reviews: { user, comment } } };
+
+        const result = await mealsCollection.updateOne(query, update);
+
+        if (result.modifiedCount > 0) {
+          res.json({ success: true, message: "Review added successfully." });
+        } else {
+          res.status(404).json({ success: false, message: "Meal not found." });
+        }
+      } catch (error) {
+        console.error(error);
+        res
+          .status(500)
+          .json({ success: false, message: "Internal server error." });
+      }
+    });
+
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!"
     );
