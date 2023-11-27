@@ -24,6 +24,7 @@ async function run() {
   try {
     const mealsCollection = client.db("mealsDB").collection("meals");
     const packageCollection = client.db("mealsDB").collection("premium");
+    const usersCollection = client.db("mealsDB").collection("users");
 
     // Get all meals
     app.get("/meals", async (req, res) => {
@@ -89,6 +90,31 @@ async function run() {
         }
       } catch (error) {
         console.error(error);
+        res
+          .status(500)
+          .json({ success: false, message: "Internal server error." });
+      }
+    });
+    app.post("/register", async (req, res) => {
+      try {
+        const userData = req.body;
+
+        // Save user information to the users collection
+        const result = await usersCollection.insertOne({
+          ...userData,
+          badge: "Bronze", // Add the default badge here
+        });
+
+        // Check if the user was inserted successfully
+        if (result.insertedCount > 0) {
+          res.json({ success: true, message: "User registered successfully." });
+        } else {
+          res
+            .status(500)
+            .json({ success: false, message: "Failed to register user." });
+        }
+      } catch (error) {
+        console.error("Error during user registration:", error);
         res
           .status(500)
           .json({ success: false, message: "Internal server error." });
