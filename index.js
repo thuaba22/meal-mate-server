@@ -1,6 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 
 const app = express();
@@ -160,6 +161,56 @@ async function run() {
         res
           .status(500)
           .json({ success: false, message: "Internal server error." });
+      }
+    });
+
+    app.post("/create-payment-intent", async (req, res) => {
+      let { amount, currency, userEmail, packageType } = req.body;
+
+      try {
+        // Create a PaymentIntent with the order amount and currency
+        const paymentIntent = await stripe.paymentIntents.create({
+          amount,
+          currency,
+        });
+
+        // Send the PaymentIntent ID to the client
+        res.json({ clientSecret: paymentIntent.client_secret });
+
+        // After successful payment, assign the badge based on the package type
+        const userQuery = { email: userEmail };
+        const user = await usersCollection.findOne(userQuery);
+
+        if (!user) {
+          console.error("User not found:", userEmail);
+          return;
+        }
+
+        let badge = "";
+
+        switch (packageType) {
+          case "Bronze":
+            badge = "Bronze";
+            break;
+          case "Silver":
+            badge = "Silver";
+            break;
+          case "Gold":
+            badge = "Gold";
+            break;
+          case "Platinum":
+            badge = "Platinum";
+            break;
+          // Add more cases for other package types if needed
+          default:
+            break;
+        }
+
+        // Update the user's badge in your database
+        await usersCollection.updateOne(userQuery, { $set: { badge } });
+      } catch (error) {
+        console.error("Error creating PaymentIntent:", error);
+        res.status(500).json({ error: "Internal Server Error" });
       }
     });
 
