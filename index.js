@@ -32,6 +32,12 @@ async function run() {
       const result = await cursor.toArray();
       res.send(result);
     });
+    //get all users
+    app.get("/users", async (req, res) => {
+      const cursor = usersCollection.find();
+      const result = await cursor.toArray();
+      res.send(result);
+    });
 
     // Get all premium packages
     app.get("/premium", async (req, res) => {
@@ -49,6 +55,24 @@ async function run() {
 
       const result = await mealsCollection.findOne(query);
       res.send(result);
+    });
+
+    app.get("/users/:email", async (req, res) => {
+      const userEmail = req.params.email;
+
+      try {
+        const userQuery = { email: userEmail };
+        const user = await usersCollection.findOne(userQuery);
+
+        if (!user) {
+          return res.status(404).json({ error: "User not found." });
+        }
+
+        res.json(user);
+      } catch (error) {
+        console.error("Error fetching user details:", error);
+        res.status(500).json({ error: "Internal server error." });
+      }
     });
 
     // Update likes for a specific meal by ID
@@ -95,9 +119,17 @@ async function run() {
           .json({ success: false, message: "Internal server error." });
       }
     });
-    app.post("/register", async (req, res) => {
+    app.post("/users", async (req, res) => {
       try {
         const userData = req.body;
+        const query = { email: userData.email };
+        const existingUser = await usersCollection.findOne(query);
+        if (existingUser) {
+          return res.send({
+            message: "user already exists",
+            instertedId: null,
+          });
+        }
 
         // Save user information to the users collection
         const result = await usersCollection.insertOne({
