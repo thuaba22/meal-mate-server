@@ -56,6 +56,16 @@ async function run() {
       const result = await mealsCollection.findOne(query);
       res.send(result);
     });
+    // Get a specific packages by Id
+    app.get("/premium/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = {
+        _id: new ObjectId(id),
+      };
+
+      const result = await packageCollection.findOne(query);
+      res.send(result);
+    });
 
     app.get("/users/:email", async (req, res) => {
       const userEmail = req.params.email;
