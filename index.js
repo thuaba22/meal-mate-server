@@ -26,7 +26,9 @@ async function run() {
     const mealsCollection = client.db("mealsDB").collection("meals");
     const packageCollection = client.db("mealsDB").collection("premium");
     const usersCollection = client.db("mealsDB").collection("users");
-
+    const requestedMealsCollection = client
+      .db("mealsDB")
+      .collection("requestedMeals");
     // Get all meals
     app.get("/meals", async (req, res) => {
       const cursor = mealsCollection.find();
@@ -36,6 +38,12 @@ async function run() {
     //get all users
     app.get("/users", async (req, res) => {
       const cursor = usersCollection.find();
+      const result = await cursor.toArray();
+      res.send(result);
+    });
+    //get all requested meals
+    app.get("/meals/request", async (req, res) => {
+      const cursor = usersMealRequestCollection.find();
       const result = await cursor.toArray();
       res.send(result);
     });
@@ -82,6 +90,36 @@ async function run() {
         res.json(user);
       } catch (error) {
         console.error("Error fetching user details:", error);
+        res.status(500).json({ error: "Internal server error." });
+      }
+    });
+
+    app.get("/meals/user-reviews/:user", async (req, res) => {
+      const user = req.params.user;
+
+      try {
+        const reviews = await mealsCollection
+          .find({ "reviews.user": user })
+          .toArray();
+        res.json(reviews);
+      } catch (error) {
+        console.error("Error fetching user reviews:", error);
+        res.status(500).json({ error: "Internal server error." });
+      }
+    });
+
+    app.get("/meals/request-multiple/:email", async (req, res) => {
+      const userEmail = req.params.email;
+
+      try {
+        const query = { "userData.email": userEmail };
+        const requestedMeals = await requestedMealsCollection
+          .find(query)
+          .toArray();
+
+        res.json(requestedMeals);
+      } catch (error) {
+        console.error("Error fetching requested meals:", error);
         res.status(500).json({ error: "Internal server error." });
       }
     });
@@ -211,6 +249,36 @@ async function run() {
       } catch (error) {
         console.error("Error creating PaymentIntent:", error);
         res.status(500).json({ error: "Internal Server Error" });
+      }
+    });
+
+    app.post("/meals/request-multiple", async (req, res) => {
+      const { meals, userData } = req.body;
+
+      try {
+        const response = await requestedMealsCollection.insertOne({
+          meals,
+          userData,
+          requestStatus: "Pending",
+        });
+
+        if (response.insertedId) {
+          res.json({
+            success: true,
+            message: "Meal request sent successfully!",
+          });
+        } else {
+          res.status(500).json({
+            success: false,
+            message: "Failed to send meal request.",
+          });
+        }
+      } catch (error) {
+        console.error(error);
+        res.status(500).json({
+          success: false,
+          message: "Internal server error.",
+        });
       }
     });
 
