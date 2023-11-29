@@ -94,20 +94,6 @@ async function run() {
       }
     });
 
-    app.get("/meals/user-reviews/:user", async (req, res) => {
-      const user = req.params.user;
-
-      try {
-        const reviews = await mealsCollection
-          .find({ "reviews.user": user })
-          .toArray();
-        res.json(reviews);
-      } catch (error) {
-        console.error("Error fetching user reviews:", error);
-        res.status(500).json({ error: "Internal server error." });
-      }
-    });
-
     app.get("/meals/request-multiple/:email", async (req, res) => {
       const userEmail = req.params.email;
 
@@ -120,6 +106,20 @@ async function run() {
         res.json(requestedMeals);
       } catch (error) {
         console.error("Error fetching requested meals:", error);
+        res.status(500).json({ error: "Internal server error." });
+      }
+    });
+
+    app.get("/meals/user-reviews/:email", async (req, res) => {
+      const userEmail = req.params.email;
+
+      try {
+        const reviews = await mealsCollection
+          .find({ reviews: { $elemMatch: { email: userEmail } } })
+          .toArray();
+        res.json(reviews);
+      } catch (error) {
+        console.error("Error fetching user reviews:", error);
         res.status(500).json({ error: "Internal server error." });
       }
     });
@@ -147,12 +147,42 @@ async function run() {
       }
     });
 
+    app.patch("/meals/review/:id", async (req, res) => {
+      const mealId = req.params.id;
+      const { email, user, comment } = req.body;
+
+      try {
+        const query = { _id: new ObjectId(mealId), "reviews.email": email };
+        const update = {
+          $set: {
+            "reviews.$.user": user,
+            "reviews.$.comment": comment,
+          },
+        };
+
+        const result = await mealsCollection.updateOne(query, update);
+
+        if (result.modifiedCount > 0) {
+          res.json({ success: true, message: "Review updated successfully." });
+        } else {
+          res
+            .status(404)
+            .json({ success: false, message: "Review not found." });
+        }
+      } catch (error) {
+        console.error(error);
+        res
+          .status(500)
+          .json({ success: false, message: "Internal server error." });
+      }
+    });
+
     app.post("/meals/review", async (req, res) => {
-      const { mealId, user, comment } = req.body;
+      const { mealId, user, email, comment } = req.body;
 
       try {
         const query = { _id: new ObjectId(mealId) };
-        const update = { $push: { reviews: { user, comment } } };
+        const update = { $push: { reviews: { email, user, comment } } };
 
         const result = await mealsCollection.updateOne(query, update);
 
@@ -279,6 +309,58 @@ async function run() {
           success: false,
           message: "Internal server error.",
         });
+      }
+    });
+
+    app.delete("/meals/request-multiple/:id", async (req, res) => {
+      const requestId = req.params.id;
+
+      try {
+        const result = await requestedMealsCollection.deleteOne({
+          _id: new ObjectId(requestId),
+        });
+
+        if (result.deletedCount > 0) {
+          res.json({
+            success: true,
+            message: "Meal request canceled successfully.",
+          });
+        } else {
+          res
+            .status(404)
+            .json({ success: false, message: "Meal request not found." });
+        }
+      } catch (error) {
+        console.error("Error canceling meal request:", error);
+        res
+          .status(500)
+          .json({ success: false, message: "Internal server error." });
+      }
+    });
+
+    app.delete("/meals/review/:id", async (req, res) => {
+      const mealId = req.params.id;
+      const email = req.body.email;
+      const user = req.body.user;
+
+      try {
+        const result = await mealsCollection.updateOne(
+          { _id: new ObjectId(mealId) },
+          { $pull: { reviews: { email: email } } }
+        );
+
+        if (result.modifiedCount > 0) {
+          res.json({ success: true, message: "Review deleted successfully." });
+        } else {
+          res
+            .status(404)
+            .json({ success: false, message: "Review not found." });
+        }
+      } catch (error) {
+        console.error(error);
+        res
+          .status(500)
+          .json({ success: false, message: "Internal server error." });
       }
     });
 
