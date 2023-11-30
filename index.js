@@ -53,7 +53,7 @@ async function run() {
     });
     //get all requested meals
     app.get("/meals/request", async (req, res) => {
-      const cursor = usersMealRequestCollection.find();
+      const cursor = requestedMealsCollection.find();
       const result = await cursor.toArray();
       res.send(result);
     });
@@ -154,6 +154,21 @@ async function run() {
       }
     });
 
+    app.get("/meals/reviews", async (req, res) => {
+      try {
+        const cursor = mealsCollection.aggregate([
+          { $unwind: "$reviews" },
+          { $project: { review: "$reviews" } },
+        ]);
+
+        const reviews = await cursor.toArray();
+        res.json(reviews);
+      } catch (error) {
+        console.error("Error fetching meal reviews:", error);
+        res.status(500).json({ error: "Internal server error." });
+      }
+    });
+
     // Update likes for a specific meal by ID
     app.put("/meals/like/:id", async (req, res) => {
       const id = req.params.id;
@@ -174,6 +189,86 @@ async function run() {
         res
           .status(500)
           .json({ success: false, message: "Internal server error." });
+      }
+    });
+
+    app.put("/meals/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const query = { _id: new ObjectId(id) };
+
+        const updatedMeals = req.body;
+        // console.log(updatedJobs);
+        delete updatedMeals["_id"];
+
+        const result = await mealsCollection.updateOne(
+          query,
+          {
+            $set: { ...updatedMeals },
+          },
+          { upsert: true }
+        );
+        console.log(result);
+        if (result.modifiedCount === 1) {
+          // Product updated successfully
+          res.status(200).json({ message: "Product updated successfully" });
+        } else {
+          // No product was updated (ID not found)
+          res.status(404).json({ message: "Product not found" });
+        }
+      } catch (error) {
+        console.error("Error updating product:", error);
+        res.status(500).json({ message: "Internal server error" });
+      }
+    });
+
+    app.put("/meals/request/:id", async (req, res) => {
+      const requestId = req.params.id;
+
+      try {
+        // Check if the meal with the specified ID exists
+        const meal = await requestedMealsCollection.findOne({
+          _id: new ObjectId(requestId),
+        });
+
+        if (!meal) {
+          return res.status(404).json({
+            success: false,
+            message: "Meal request not found.",
+          });
+        }
+
+        // Check if the meal is already delivered
+        if (meal.requestStatus === "Delivered") {
+          return res.json({
+            success: false,
+            message: "Meal is already served.",
+          });
+        }
+
+        // Update the status of the meal to "Delivered"
+        const result = await requestedMealsCollection.updateOne(
+          { _id: new ObjectId(requestId) },
+          { $set: { requestStatus: "Delivered" } }
+        );
+
+        if (result.modifiedCount > 0) {
+          res.json({
+            success: true,
+            message: "Meal served successfully.",
+          });
+        } else {
+          res.status(500).json({
+            success: false,
+            message: "Failed to serve meal. Please try again.",
+          });
+        }
+      } catch (error) {
+        console.error("Error serving meal:", error);
+        res.status(500).json({
+          success: false,
+          message: "Internal server error. Please try again later.",
+        });
       }
     });
 
