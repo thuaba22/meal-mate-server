@@ -26,12 +26,22 @@ async function run() {
     const mealsCollection = client.db("mealsDB").collection("meals");
     const packageCollection = client.db("mealsDB").collection("premium");
     const usersCollection = client.db("mealsDB").collection("users");
+    const upcomingMealsCollection = client
+      .db("mealsDB")
+      .collection("upcomingMeals");
+
     const requestedMealsCollection = client
       .db("mealsDB")
       .collection("requestedMeals");
     // Get all meals
     app.get("/meals", async (req, res) => {
       const cursor = mealsCollection.find();
+      const result = await cursor.toArray();
+      res.send(result);
+    });
+    // get upcoming meals
+    app.get("/upcoming-meals", async (req, res) => {
+      const cursor = upcomingMealsCollection.find();
       const result = await cursor.toArray();
       res.send(result);
     });
@@ -88,6 +98,26 @@ async function run() {
         }
 
         res.json(user);
+      } catch (error) {
+        console.error("Error fetching user details:", error);
+        res.status(500).json({ error: "Internal server error." });
+      }
+    });
+    app.get("/users/admin/:email", async (req, res) => {
+      const userEmail = req.params.email;
+      try {
+        const userQuery = { email: userEmail };
+        const user = await usersCollection.findOne(userQuery);
+
+        if (!user) {
+          return res.status(404).json({ error: "User not found." });
+        }
+        let admin = false;
+        if (user) {
+          admin = user?.role === "admin";
+        }
+
+        res.send({ admin });
       } catch (error) {
         console.error("Error fetching user details:", error);
         res.status(500).json({ error: "Internal server error." });
@@ -186,6 +216,103 @@ async function run() {
       };
       const result = await usersCollection.updateOne(filter, updatedDoc);
       res.send(result);
+    });
+
+    app.post("/meals", async (req, res) => {
+      try {
+        const newMeal = req.body;
+        const result = await mealsCollection.insertOne(newMeal);
+
+        if (result.insertedId) {
+          res.status(201).json({
+            success: true,
+            message: "Meal added successfully.",
+            insertedId: result.insertedId,
+          });
+        } else {
+          res.status(500).json({
+            success: false,
+            message: "Failed to add meal. Please try again.",
+          });
+        }
+      } catch (error) {
+        console.error("Error adding meal:", error);
+        res.status(500).json({
+          success: false,
+          message: "Internal server error. Please try again later.",
+        });
+      }
+    });
+    // upcoming meals
+    app.post("/upcoming-meals", async (req, res) => {
+      try {
+        const newUpcomingMeal = req.body;
+        const result = await upcomingMealsCollection.insertOne(newUpcomingMeal);
+
+        if (result.insertedId) {
+          res.status(201).json({
+            success: true,
+            message: "Upcoming meal added successfully.",
+            insertedId: result.insertedId,
+          });
+        } else {
+          res.status(500).json({
+            success: false,
+            message: "Failed to add upcoming meal. Please try again.",
+          });
+        }
+      } catch (error) {
+        console.error("Error adding upcoming meal:", error);
+        res.status(500).json({
+          success: false,
+          message: "Internal server error. Please try again later.",
+        });
+      }
+    });
+    app.post("/upcoming-meals/:mealId/like", async (req, res) => {
+      try {
+        const mealId = req.params.mealId;
+
+        // Fetch the meal from the database based on the mealId
+        const meal = await upcomingMealsCollection.findOne({
+          _id: new ObjectId(mealId),
+        });
+
+        if (!meal) {
+          return res.status(404).json({
+            success: false,
+            message: "Meal not found.",
+          });
+        }
+
+        // Increment the likes count
+        const updatedLikes = meal.likes + 1;
+
+        // Update the likes count in the database
+        const result = await upcomingMealsCollection.updateOne(
+          { _id: new ObjectId(mealId) },
+          { $set: { likes: updatedLikes } }
+        );
+
+        if (result.modifiedCount > 0) {
+          res.status(200).json({
+            success: true,
+            message: "Like added successfully.",
+            likes: updatedLikes,
+          });
+        } else {
+          res.status(500).json({
+            success: false,
+            message: "Failed to add like. Please try again.",
+          });
+        }
+      } catch (error) {
+        console.error("Error adding like:", error);
+        res.status(500).json({
+          success: false,
+          message: "Internal server error. Please try again later.",
+        });
+      }
     });
 
     app.post("/meals/review", async (req, res) => {
@@ -372,6 +499,36 @@ async function run() {
         res
           .status(500)
           .json({ success: false, message: "Internal server error." });
+      }
+    });
+
+    app.delete("/meals/:id", async (req, res) => {
+      try {
+        const mealId = req.params.id;
+
+        // Perform any additional checks here if needed before deletion
+
+        const result = await mealsCollection.deleteOne({
+          _id: new ObjectId(mealId),
+        });
+
+        if (result.deletedCount === 1) {
+          res.status(200).json({
+            success: true,
+            message: "Meal deleted successfully.",
+          });
+        } else {
+          res.status(404).json({
+            success: false,
+            message: "Meal not found.",
+          });
+        }
+      } catch (error) {
+        console.error("Error deleting meal:", error);
+        res.status(500).json({
+          success: false,
+          message: "Internal server error. Please try again later.",
+        });
       }
     });
 
