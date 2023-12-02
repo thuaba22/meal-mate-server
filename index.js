@@ -445,7 +445,7 @@ async function run() {
       }
     });
 
-    app.post("/meals/review", async (req, res) => {
+    app.post("/reviews/byUser", async (req, res) => {
       const { mealId, user, email, comment } = req.body;
 
       try {
