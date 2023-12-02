@@ -65,6 +65,41 @@ async function run() {
       res.send(result);
     });
 
+    app.get("/meals/reviews", async (req, res) => {
+      try {
+        const { page = 1, limit = 5 } = req.query;
+
+        const reviews = await mealsCollection
+          .aggregate([
+            {
+              $unwind: "$reviews",
+            },
+            {
+              $project: {
+                _id: 1,
+                title: 1,
+                likes: 1,
+                reviewUser: "$reviews.user",
+                reviewComment: "$reviews.comment",
+              },
+            },
+            {
+              $sort: {
+                likes: -1,
+              },
+            },
+          ])
+          .skip((page - 1) * limit)
+          .limit(parseInt(limit))
+          .toArray();
+
+        res.json(reviews);
+      } catch (error) {
+        console.error("Error fetching reviews:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+      }
+    });
+
     // Get a specific meal by ID
     app.get("/meals/:id", async (req, res) => {
       const id = req.params.id;
@@ -620,6 +655,103 @@ async function run() {
         }
       } catch (error) {
         console.error("Error deleting meal:", error);
+        res.status(500).json({
+          success: false,
+          message: "Internal server error. Please try again later.",
+        });
+      }
+    });
+
+    // DELETE endpoint to delete a review by mealId and comment
+    app.delete("/meals/reviews/:mealId", async (req, res) => {
+      try {
+        const { mealId } = req.params;
+        const { comment } = req.body;
+
+        // Convert mealId to ObjectId
+        const mealObjectId = new ObjectId(mealId);
+
+        // Update the reviews in the database
+        const result = await mealsCollection.updateOne(
+          { _id: mealObjectId },
+          { $pull: { reviews: { comment } } }
+        );
+
+        if (result.modifiedCount === 0) {
+          return res.status(404).json({ error: "Review not found" });
+        }
+
+        res.json({ message: "Review deleted successfully" });
+      } catch (error) {
+        console.error("Error deleting review:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+      }
+    });
+
+    app.get("/upcoming-meals", async (req, res) => {
+      try {
+        // Get all upcoming meals
+        const cursor = upcomingMealsCollection.find();
+        const upcomingMeals = await cursor.toArray();
+
+        // Sort upcoming meals based on likes count (descending order)
+        upcomingMeals.sort((a, b) => b.likes - a.likes);
+
+        res.json(upcomingMeals);
+      } catch (error) {
+        console.error("Error fetching upcoming meals:", error);
+        res.status(500).json({
+          success: false,
+          message: "Internal server error. Please try again later.",
+        });
+      }
+    });
+
+    app.put("/upcoming-meals/publish/:id", async (req, res) => {
+      const mealId = req.params.id;
+
+      try {
+        // Check if the upcoming meal with the specified ID exists
+        const upcomingMeal = await upcomingMealsCollection.findOne({
+          _id: new ObjectId(mealId),
+        });
+
+        if (!upcomingMeal) {
+          return res.status(404).json({
+            success: false,
+            message: "Upcoming meal not found.",
+          });
+        }
+
+        // Check if the meal has at least 10 likes
+        if (upcomingMeal.likes < 10) {
+          return res.json({
+            success: false,
+            message: "Meal needs at least 10 likes to be published.",
+          });
+        }
+
+        // Add the upcoming meal to the all-meals collection
+        const result = await mealsCollection.insertOne(upcomingMeal);
+
+        if (result.insertedId) {
+          // Remove the published upcoming meal from the upcoming-meals collection
+          await upcomingMealsCollection.deleteOne({
+            _id: new ObjectId(mealId),
+          });
+
+          res.json({
+            success: true,
+            message: "Meal published successfully.",
+          });
+        } else {
+          res.status(500).json({
+            success: false,
+            message: "Failed to publish meal. Please try again.",
+          });
+        }
+      } catch (error) {
+        console.error("Error publishing meal:", error);
         res.status(500).json({
           success: false,
           message: "Internal server error. Please try again later.",
